@@ -13,6 +13,7 @@ class Project(ConanFile):
         "spdlog/1.12.0",
         "nlohmann_json/3.11.3",
         "cli11/2.3.2",
+        "cpython/3.12.2",
     ]
     generators = "CMakeDeps"
 
