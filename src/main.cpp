@@ -46,19 +46,63 @@ auto main( int argc, char** argv ) -> int
     spdlog::set_level( log_level );
     SPDLOG_INFO( "Starting {} v{} ..", app_name, version::getVersionInfo() );
 
-    wchar_t* program = Py_DecodeLocale( argv[0], NULL );
-    if( program == NULL ) {
-        fprintf( stderr, "Fatal error: cannot decode argv[0]\n" );
-        exit( 1 );
-    }
-    Py_SetProgramName( program ); /* optional but recommended */
     Py_Initialize();
-    PyRun_SimpleString( "from time import time,ctime\n"
-                        "print('Today is', ctime(time()))\n" );
-    if( Py_FinalizeEx() < 0 ) {
-        exit( 120 );
-    }
-    PyMem_RawFree( program );
 
+    std::string add_path =
+        std::string( "import sys; sys.path.append(\"" ) + json_config["app"]["path"].get< str >() + "\")";
+    PyRun_SimpleString( add_path.c_str() );
+
+    PyObject* pName = PyUnicode_DecodeFSDefault( json_config["app"]["module"].get< str >().c_str() );
+    PyObject* pModule = PyImport_Import( pName );
+    Py_DECREF( pName );
+
+    if( pModule != nullptr ) {
+        PyObject* pClass =
+            PyObject_GetAttrString( pModule, json_config["app"]["class"].get< str >().c_str() );
+
+        if( pClass and PyCallable_Check( pClass ) ) {
+            PyObject* pInstance = PyObject_CallObject( pClass, Py_BuildValue( "(i)", 10 ) );
+
+            if( pInstance != nullptr ) {
+                PyObject* pValue = PyObject_CallMethod( pInstance, "get_value", nullptr );
+
+                if( pValue != nullptr ) {
+                    SPDLOG_INFO( "Value: {}", PyLong_AsLong( pValue ) );
+                    Py_DECREF( pValue );
+                }
+                else {
+                    PyErr_Print();
+                }
+
+                PyObject_CallMethod( pInstance, "set_value", "(i)", 20 );
+                pValue = PyObject_CallMethod( pInstance, "get_value", nullptr );
+
+                if( pValue != nullptr ) {
+                    SPDLOG_INFO( "Updated Value: {}", PyLong_AsLong( pValue ) );
+                    Py_DECREF( pValue );
+                }
+                else {
+                    PyErr_Print();
+                }
+
+                Py_DECREF( pInstance );
+            }
+            else {
+                PyErr_Print();
+            }
+
+            Py_DECREF( pClass );
+        }
+        else {
+            PyErr_Print();
+        }
+
+        Py_DECREF( pModule );
+    }
+    else {
+        PyErr_Print();
+    }
+
+    Py_Finalize();
     SPDLOG_INFO( "Done." );
 }
